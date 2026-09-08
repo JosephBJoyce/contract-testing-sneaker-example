@@ -1,0 +1,47 @@
+name: Setup PactFlow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      PACT_BROKER_BASE_URL: ${{ vars.PACT_BROKER_BASE_URL }}
+      PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+
+    steps:
+      - name: Create production environment
+        run: |
+          curl -sf -o /dev/null -X POST "$PACT_BROKER_BASE_URL/environments" \
+            -H "Authorization: Bearer $PACT_BROKER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"production","displayName":"Production","production":true}' \
+          || echo "Environment may already exist, continuing"
+
+      - name: Create staging environment
+        run: |
+          curl -sf -o /dev/null -X POST "$PACT_BROKER_BASE_URL/environments" \
+            -H "Authorization: Bearer $PACT_BROKER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"staging","displayName":"Staging","production":false}' \
+          || echo "Environment may already exist, continuing"
+
+      - name: Register sneaker-studio-web (consumer)
+        run: |
+          curl -sf -o /dev/null -X POST "$PACT_BROKER_BASE_URL/pacticipants" \
+            -H "Authorization: Bearer $PACT_BROKER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"sneaker-studio-web","repositoryUrl":"https://github.com/JosephBJoyce/contract-testing-sneaker-example"}' \
+          || echo "Pacticipant may already exist, continuing"
+
+      - name: Register warehouse-inventory-api (provider)
+        run: |
+          curl -sf -o /dev/null -X POST "$PACT_BROKER_BASE_URL/pacticipants" \
+            -H "Authorization: Bearer $PACT_BROKER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"warehouse-inventory-api","repositoryUrl":"https://github.com/JosephBJoyce/contract-testing-sneaker-example"}' \
+          || echo "Pacticipant may already exist, continuing"
+
+      - name: Done
+        run: echo "PactFlow setup complete"
