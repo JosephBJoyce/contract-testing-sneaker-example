@@ -41,19 +41,23 @@ jobs:
 
       - name: Can I deploy?
         run: |
-          npx pact-broker can-i-deploy \
-            --broker-base-url "$PACT_BROKER_BASE_URL" \
-            --broker-token "$PACT_BROKER_TOKEN" \
-            --pacticipant warehouse-inventory-api \
-            --version "${{ github.sha }}" \
-            --to-environment production
+          docker run --rm \
+            -e PACT_BROKER_BASE_URL \
+            -e PACT_BROKER_TOKEN \
+            pactfoundation/pact-cli:latest \
+            pact-broker can-i-deploy \
+              --pacticipant warehouse-inventory-api \
+              --version "${{ github.sha }}" \
+              --to-environment production
 
       - name: Record deployment to production
         if: github.ref_name == 'main'
         run: |
-          npx pact-broker record-deployment \
-            --broker-base-url "$PACT_BROKER_BASE_URL" \
-            --broker-token "$PACT_BROKER_TOKEN" \
-            --pacticipant warehouse-inventory-api \
-            --version "${{ github.sha }}" \
-            --environment production
+          docker run --rm \
+            -e PACT_BROKER_BASE_URL \
+            -e PACT_BROKER_TOKEN \
+            pactfoundation/pact-cli:latest \
+            pact-broker record-deployment \
+              --pacticipant warehouse-inventory-api \
+              --version "${{ github.sha }}" \
+              --environment production

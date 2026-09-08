@@ -38,27 +38,34 @@ jobs:
 
       - name: Publish pacts to PactFlow
         run: |
-          npx pact-broker publish ./pacts \
-            --broker-base-url "$PACT_BROKER_BASE_URL" \
-            --broker-token "$PACT_BROKER_TOKEN" \
-            --consumer-app-version "${{ github.sha }}" \
-            --branch "${{ github.ref_name }}"
+          docker run --rm \
+            -v "${PWD}/pacts:/pacts" \
+            -e PACT_BROKER_BASE_URL \
+            -e PACT_BROKER_TOKEN \
+            pactfoundation/pact-cli:latest \
+            pact-broker publish /pacts \
+              --consumer-app-version "${{ github.sha }}" \
+              --branch "${{ github.ref_name }}"
 
       - name: Can I deploy?
         run: |
-          npx pact-broker can-i-deploy \
-            --broker-base-url "$PACT_BROKER_BASE_URL" \
-            --broker-token "$PACT_BROKER_TOKEN" \
-            --pacticipant sneaker-studio-web \
-            --version "${{ github.sha }}" \
-            --to-environment production
+          docker run --rm \
+            -e PACT_BROKER_BASE_URL \
+            -e PACT_BROKER_TOKEN \
+            pactfoundation/pact-cli:latest \
+            pact-broker can-i-deploy \
+              --pacticipant sneaker-studio-web \
+              --version "${{ github.sha }}" \
+              --to-environment production
 
       - name: Record deployment to production
         if: github.ref_name == 'main'
         run: |
-          npx pact-broker record-deployment \
-            --broker-base-url "$PACT_BROKER_BASE_URL" \
-            --broker-token "$PACT_BROKER_TOKEN" \
-            --pacticipant sneaker-studio-web \
-            --version "${{ github.sha }}" \
-            --environment production
+          docker run --rm \
+            -e PACT_BROKER_BASE_URL \
+            -e PACT_BROKER_TOKEN \
+            pactfoundation/pact-cli:latest \
+            pact-broker record-deployment \
+              --pacticipant sneaker-studio-web \
+              --version "${{ github.sha }}" \
+              --environment production
