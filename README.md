@@ -1,4 +1,4 @@
-# Sneaker Studio — Pact Contract Testing Example
+# Sneaker Studio — Contract Testing Example
 
 This repository demonstrates **Classic Consumer-Driven Contract Testing (CDC)** with Pact and PactFlow. The scenario: a custom sneaker storefront (the consumer) calls a warehouse inventory API (the provider) to check whether all the materials needed to build a bespoke shoe are in stock before confirming an order.
 
