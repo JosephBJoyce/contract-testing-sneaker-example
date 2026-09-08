@@ -1,0 +1,396 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Inventory API
+  description: >
+    Checks whether a warehouse holds all the materials required to fulfil a
+    custom sneaker order, and exposes the materials catalogue.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3002
+    description: Local development server
+
+tags:
+  - name: Inventory
+    description: Inventory availability checks for custom shoe orders
+  - name: Materials
+    description: Materials catalogue
+
+paths:
+  /v1/inventory/check:
+    post:
+      tags:
+        - Inventory
+      summary: Check material availability for a custom shoe configuration
+      description: >
+        Evaluates whether the warehouse has sufficient stock of every material
+        required to build the requested custom sneaker. Returns availability
+        status and, when stock is sufficient, an estimated production lead time.
+      operationId: checkInventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShoeConfiguration'
+            examples:
+              leather-rubber-available:
+                summary: Leather upper with rubber sole — in stock
+                value:
+                  size: US-10
+                  upperMaterial: LEATHER
+                  soleType: RUBBER
+                  colorways:
+                    - zone: TOE_BOX
+                      color: '#FFFFFF'
+                    - zone: HEEL
+                      color: '#000000'
+                    - zone: TONGUE
+                      color: '#FF0000'
+                    - zone: LACES
+                      color: '#FFFFFF'
+              suede-foam-unavailable:
+                summary: Suede upper — out of stock
+                value:
+                  size: US-12
+                  upperMaterial: SUEDE
+                  soleType: FOAM
+                  colorways:
+                    - zone: TOE_BOX
+                      color: '#C0C0C0'
+                    - zone: HEEL
+                      color: '#C0C0C0'
+                    - zone: TONGUE
+                      color: '#C0C0C0'
+                    - zone: LACES
+                      color: '#000000'
+      responses:
+        '200':
+          description: >
+            Inventory check completed. Inspect `available` to determine
+            whether the order can proceed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/InventoryAvailable'
+                  - $ref: '#/components/schemas/InventoryUnavailable'
+              examples:
+                available:
+                  summary: All materials in stock
+                  value:
+                    available: true
+                    estimatedProductionDays: 5
+                    materials:
+                      - name: White Full-Grain Leather
+                        type: UPPER
+                        stockLevel: HIGH
+                      - name: Black Vulcanized Rubber Sole
+                        type: SOLE
+                        stockLevel: MEDIUM
+                unavailable:
+                  summary: One or more materials out of stock
+                  value:
+                    available: false
+                    estimatedProductionDays: null
+                    missingMaterials:
+                      - name: Silver Suede Upper Panel
+                        shortage: OUT_OF_STOCK
+        '422':
+          description: The shoe configuration contains an unrecognised value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_CONFIGURATION
+                message: 'upperMaterial must be one of: LEATHER, MESH, SUEDE, CANVAS'
+
+  /v1/materials:
+    get:
+      tags:
+        - Materials
+      summary: List all materials in the catalogue
+      description: >
+        Returns every material stocked by the warehouse, including current
+        availability. Use this to populate the design UI before the customer
+        configures their shoe.
+      operationId: getMaterials
+      responses:
+        '200':
+          description: Materials catalogue returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialsList'
+              example:
+                materials:
+                  - id: mat-leather-white
+                    name: White Full-Grain Leather
+                    type: UPPER
+                    inStock: true
+                  - id: mat-leather-black
+                    name: Black Full-Grain Leather
+                    type: UPPER
+                    inStock: true
+                  - id: mat-rubber-sole
+                    name: Black Vulcanized Rubber Sole
+                    type: SOLE
+                    inStock: true
+                  - id: mat-foam-sole
+                    name: White EVA Foam Sole
+                    type: SOLE
+                    inStock: true
+                  - id: mat-suede-silver
+                    name: Silver Suede Upper Panel
+                    type: UPPER
+                    inStock: false
+
+  /v1/materials/{materialId}:
+    get:
+      tags:
+        - Materials
+      summary: Get detailed information for a specific material
+      description: >
+        Returns stock level, available colour options, and category for a
+        single catalogue entry. Use this when a customer selects a material
+        to see which colour options are available.
+      operationId: getMaterial
+      parameters:
+        - name: materialId
+          in: path
+          required: true
+          description: The unique identifier of the material (e.g. `mat-leather-white`).
+          schema:
+            type: string
+          example: mat-leather-white
+      responses:
+        '200':
+          description: Material detail returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialDetail'
+              example:
+                id: mat-leather-white
+                name: White Full-Grain Leather
+                type: UPPER
+                inStock: true
+                stockLevel: HIGH
+                availableColors:
+                  - '#FFFFFF'
+                  - '#F5F5DC'
+                  - '#FFFACD'
+        '404':
+          description: No material with that id exists in the catalogue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: NOT_FOUND
+                message: 'No material found with id: mat-unknown'
+
+components:
+  schemas:
+    ShoeConfiguration:
+      type: object
+      required:
+        - size
+        - upperMaterial
+        - soleType
+        - colorways
+      properties:
+        size:
+          type: string
+          description: Shoe size in US notation.
+          example: US-10
+        upperMaterial:
+          type: string
+          enum: [LEATHER, MESH, SUEDE, CANVAS]
+          description: Primary material for the upper body of the shoe.
+          example: LEATHER
+        soleType:
+          type: string
+          enum: [RUBBER, FOAM, LEATHER]
+          description: Material used for the sole.
+          example: RUBBER
+        colorways:
+          type: array
+          description: Colour assignments for each zone of the shoe.
+          items:
+            $ref: '#/components/schemas/Colorway'
+
+    Colorway:
+      type: object
+      required:
+        - zone
+        - color
+      properties:
+        zone:
+          type: string
+          enum: [TOE_BOX, HEEL, TONGUE, LACES]
+          description: The zone of the shoe this colour applies to.
+          example: TOE_BOX
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          description: Hex colour code for the zone.
+          example: '#FFFFFF'
+
+    InventoryAvailable:
+      type: object
+      required:
+        - available
+        - estimatedProductionDays
+        - materials
+      properties:
+        available:
+          type: boolean
+          enum: [true]
+        estimatedProductionDays:
+          type: integer
+          description: Number of working days to produce the order.
+          example: 5
+        materials:
+          type: array
+          description: Materials that will be used to build the shoe.
+          items:
+            $ref: '#/components/schemas/MaterialSummary'
+
+    InventoryUnavailable:
+      type: object
+      required:
+        - available
+        - estimatedProductionDays
+        - missingMaterials
+      properties:
+        available:
+          type: boolean
+          enum: [false]
+        estimatedProductionDays:
+          nullable: true
+          type: integer
+          example: null
+        missingMaterials:
+          type: array
+          description: Materials that cannot currently be sourced.
+          items:
+            $ref: '#/components/schemas/MissingMaterial'
+
+    MaterialSummary:
+      type: object
+      required:
+        - name
+        - type
+        - stockLevel
+      properties:
+        name:
+          type: string
+          example: White Full-Grain Leather
+        type:
+          type: string
+          enum: [UPPER, SOLE, LINING]
+          example: UPPER
+        stockLevel:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: HIGH
+
+    MissingMaterial:
+      type: object
+      required:
+        - name
+        - shortage
+      properties:
+        name:
+          type: string
+          example: Silver Suede Upper Panel
+        shortage:
+          type: string
+          enum: [LOW_STOCK, OUT_OF_STOCK]
+          description: Severity of the stock shortage.
+          example: OUT_OF_STOCK
+
+    MaterialsList:
+      type: object
+      required:
+        - materials
+      properties:
+        materials:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialListItem'
+
+    MaterialListItem:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - inStock
+      properties:
+        id:
+          type: string
+          example: mat-leather-white
+        name:
+          type: string
+          example: White Full-Grain Leather
+        type:
+          type: string
+          enum: [UPPER, SOLE, LINING]
+          example: UPPER
+        inStock:
+          type: boolean
+          example: true
+
+    MaterialDetail:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - inStock
+        - stockLevel
+        - availableColors
+      properties:
+        id:
+          type: string
+          example: mat-leather-white
+        name:
+          type: string
+          example: White Full-Grain Leather
+        type:
+          type: string
+          enum: [UPPER, SOLE, LINING]
+          example: UPPER
+        inStock:
+          type: boolean
+          example: true
+        stockLevel:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: HIGH
+        availableColors:
+          type: array
+          description: Hex colour codes this material can be dyed to.
+          items:
+            type: string
+            pattern: '^#[0-9A-Fa-f]{6}$'
+          example:
+            - '#FFFFFF'
+            - '#F5F5DC'
+            - '#FFFACD'
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: No material found with id: mat-unknown
